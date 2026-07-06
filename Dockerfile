@@ -17,8 +17,7 @@ ENV HOST=0.0.0.0
 ENV PORT=3102
 
 COPY package*.json ./
-RUN npm install --omit=dev && npm install --no-save tsx
-
+COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY server ./server
 
