@@ -1,0 +1,45 @@
+<svg width="2000" height="1200" viewBox="0 0 2000 1200" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bgGradient" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f3f6ff"/>
+      <stop offset="50%" stop-color="#f7fbff"/>
+      <stop offset="100%" stop-color="#eef3ff"/>
+    </linearGradient>
+
+    <radialGradient id="blobSoftBlue" cx="0" cy="0" r="1"
+                    gradientUnits="userSpaceOnUse"
+                    gradientTransform="translate(400 200) rotate(45) scale(420 260)">
+      <stop offset="0%" stop-color="#e4f0ff" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#e4f0ff" stop-opacity="0"/>
+    </radialGradient>
+
+    <radialGradient id="blobSoftPurple" cx="0" cy="0" r="1"
+                    gradientUnits="userSpaceOnUse"
+                    gradientTransform="translate(1600 250) rotate(-30) scale(380 230)">
+      <stop offset="0%" stop-color="#e8e7ff" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#e8e7ff" stop-opacity="0"/>
+    </radialGradient>
+
+    <radialGradient id="blobSoftBottom" cx="0" cy="0" r="1"
+                    gradientUnits="userSpaceOnUse"
+                    gradientTransform="translate(1000 1050) rotate(0) scale(900 260)">
+      <stop offset="0%" stop-color="#e9f5ff" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#e9f5ff" stop-opacity="0"/>
+    </radialGradient>
+
+    <filter id="softNoise">
+      <feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="3" stitchTiles="no"/>
+      <feColorMatrix type="matrix"
+        values="0 0 0 0 1
+                0 0 0 0 1
+                0 0 0 0 1
+                0 0 0 0.04 0"/>
+    </filter>
+  </defs>
+
+  <rect width="2000" height="1200" fill="url(#bgGradient)"/>
+  <rect width="2000" height="1200" fill="url(#blobSoftBlue)"/>
+  <rect width="2000" height="1200" fill="url(#blobSoftPurple)"/>
+  <rect width="2000" height="1200" fill="url(#blobSoftBottom)"/>
+  <rect width="2000" height="1200" filter="url(#softNoise)" opacity="0.35"/>
+</svg>

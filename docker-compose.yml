@@ -1,0 +1,14 @@
+services:
+  aidashboard:
+    build: .
+    container_name: aidashboard
+    ports:
+      - "${PORT:-3102}:3102"
+    environment:
+      HOST: 0.0.0.0
+      PORT: 3102
+      HEALTH_CHECK_TIMEOUT_MS: ${HEALTH_CHECK_TIMEOUT_MS:-8000}
+      HEALTH_POLL_INTERVAL_MS: ${HEALTH_POLL_INTERVAL_MS:-30000}
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
