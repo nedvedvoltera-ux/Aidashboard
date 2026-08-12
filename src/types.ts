@@ -80,6 +80,163 @@ export function resolveCheckUrl(system: System): string | null {
   return candidate || null;
 }
 
+// --- Виртуальные машины (мониторинг производительности) ---
+
+export type VmExporterKind = "node_exporter" | "windows_exporter" | "unknown";
+
+export type VmNode = {
+  id: string;
+  name: string;
+  host: string;
+  exporterUrl: string;
+  description: string;
+  monitoringEnabled: boolean;
+};
+
+export type VmMetrics = {
+  cpuPercent?: number;
+  memoryPercent?: number;
+  memoryTotalBytes?: number;
+  memoryUsedBytes?: number;
+  diskPercent?: number;
+  diskTotalBytes?: number;
+  diskUsedBytes?: number;
+  uptimeSeconds?: number;
+  exporter?: VmExporterKind;
+};
+
+export type VmStatus = "online" | "offline" | "degraded" | "no-counter" | "checking";
+
+export type VmHealthState = {
+  status: VmStatus;
+  checking: boolean;
+  latencyMs?: number;
+  metrics?: VmMetrics;
+  checkedAt?: number;
+  error?: string;
+};
+
+export const VM_STATUS_LABELS: Record<VmStatus, string> = {
+  online: "Онлайн",
+  offline: "Офлайн",
+  degraded: "Высокая нагрузка",
+  "no-counter": "Нет счётчика",
+  checking: "Проверка…",
+};
+
+export const VM_DEGRADED_THRESHOLD_PERCENT = 85;
+
+export function getVmStatus(vm: VmNode, health?: VmHealthState): VmStatus {
+  if (!vm.monitoringEnabled) {
+    return "no-counter";
+  }
+  if (!health || (health.checking && health.checkedAt === undefined)) {
+    return "checking";
+  }
+  if (health.status === "online" && health.metrics) {
+    const values = [health.metrics.cpuPercent, health.metrics.memoryPercent, health.metrics.diskPercent];
+    if (values.some((value) => typeof value === "number" && value >= VM_DEGRADED_THRESHOLD_PERCENT)) {
+      return "degraded";
+    }
+  }
+  return health.status;
+}
+
+export function migrateVmNode(raw: unknown): VmNode | null {
+  if (!raw || typeof raw !== "object") {
+    return null;
+  }
+  const record = raw as Record<string, unknown>;
+  if (typeof record.id !== "string" || typeof record.name !== "string") {
+    return null;
+  }
+  return {
+    id: record.id,
+    name: record.name,
+    host: typeof record.host === "string" ? record.host : "",
+    exporterUrl: typeof record.exporterUrl === "string" ? record.exporterUrl : "",
+    description: typeof record.description === "string" ? record.description : "",
+    monitoringEnabled: Boolean(record.monitoringEnabled),
+  };
+}
+
+// --- LLM-сервисы (мониторинг доступности) ---
+
+export type LlmProbeMode = "openai" | "ollama" | "custom";
+
+export type LlmService = {
+  id: string;
+  name: string;
+  baseUrl: string;
+  model: string;
+  probeMode: LlmProbeMode;
+  apiKeyEnv: string;
+  customPath: string;
+  description: string;
+  monitoringEnabled: boolean;
+};
+
+export type LlmHealthState = {
+  status: SystemStatus;
+  checking: boolean;
+  latencyMs?: number;
+  modelsCount?: number;
+  models?: string[];
+  checkedAt?: number;
+  error?: string;
+};
+
+export function getLlmStatus(service: LlmService, health?: LlmHealthState): SystemStatus {
+  if (!service.monitoringEnabled) {
+    return "no-counter";
+  }
+  if (!health || (health.checking && health.checkedAt === undefined)) {
+    return "checking";
+  }
+  return health.status;
+}
+
+export function migrateLlmService(raw: unknown): LlmService | null {
+  if (!raw || typeof raw !== "object") {
+    return null;
+  }
+  const record = raw as Record<string, unknown>;
+  if (typeof record.id !== "string" || typeof record.name !== "string") {
+    return null;
+  }
+  return {
+    id: record.id,
+    name: record.name,
+    baseUrl: typeof record.baseUrl === "string" ? record.baseUrl : "",
+    model: typeof record.model === "string" ? record.model : "",
+    probeMode: record.probeMode === "ollama" ? "ollama" : record.probeMode === "custom" ? "custom" : "openai",
+    apiKeyEnv: typeof record.apiKeyEnv === "string" ? record.apiKeyEnv : "",
+    customPath: typeof record.customPath === "string" ? record.customPath : "",
+    description: typeof record.description === "string" ? record.description : "",
+    monitoringEnabled: Boolean(record.monitoringEnabled),
+  };
+}
+
+// --- Docker (мониторинг состояния контейнеров) ---
+
+export type DockerContainerStatus = {
+  id: string;
+  name: string;
+  image: string;
+  state: string;
+  status: string;
+  health?: string;
+  createdAt?: number;
+};
+
+export type DockerStatusPayload = {
+  available: boolean;
+  containers: DockerContainerStatus[];
+  error?: string;
+  connection?: string;
+  checkedAt: number;
+};
+
 export function migrateSystem(raw: unknown): System | null {
   if (!raw || typeof raw !== "object") {
     return null;

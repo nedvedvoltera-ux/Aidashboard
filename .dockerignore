@@ -3,6 +3,8 @@ dist
 .git
 .gitignore
 data/systems.json
+data/vms.json
+data/llms.json
 *.md
 .cursor
 terminals

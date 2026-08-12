@@ -17,6 +17,11 @@ import {
   refreshHealthForSystem,
   startHealthPoller,
 } from "./healthPoller.ts";
+import { createVm, deleteVm, listVms, updateVm } from "./vms.ts";
+import { getVmStatusPayload, refreshVm, startVmPoller } from "./vmPoller.ts";
+import { createLlm, deleteLlm, listLlms, updateLlm } from "./llms.ts";
+import { getLlmStatusPayload, refreshLlm, startLlmPoller } from "./llmPoller.ts";
+import { getDockerStatusPayload, startDockerPoller } from "./dockerPoller.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = path.resolve(__dirname, "..");
@@ -267,6 +272,163 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
+  // --- Виртуальные машины (performance monitoring через node_exporter/windows_exporter) ---
+
+  if (url === "/api/vms/status" && req.method === "GET") {
+    sendJson(res, 200, getVmStatusPayload());
+    return;
+  }
+
+  if (url === "/api/vms" && req.method === "GET") {
+    try {
+      const vms = await listVms();
+      sendJson(res, 200, { vms });
+    } catch (error) {
+      sendJson(res, 500, { error: error instanceof Error ? error.message : "Failed to load VMs" });
+    }
+    return;
+  }
+
+  if (url === "/api/vms" && req.method === "POST") {
+    if (!(await requireEditPin(req))) {
+      sendJson(res, 401, { error: "Invalid or missing edit PIN" });
+      return;
+    }
+
+    try {
+      const body = await readJsonBody(req);
+      const vm = await createVm(body);
+      void refreshVm(vm.id);
+      sendJson(res, 201, { vm });
+    } catch (error) {
+      sendJson(res, 400, { error: error instanceof Error ? error.message : "Failed to create VM" });
+    }
+    return;
+  }
+
+  const vmMatch = url.match(/^\/api\/vms\/([^/]+)$/);
+  if (vmMatch) {
+    const vmId = decodeURIComponent(vmMatch[1]);
+
+    if (req.method === "PUT") {
+      if (!(await requireEditPin(req))) {
+        sendJson(res, 401, { error: "Invalid or missing edit PIN" });
+        return;
+      }
+
+      try {
+        const body = await readJsonBody(req);
+        const vm = await updateVm(vmId, body);
+        void refreshVm(vm.id);
+        sendJson(res, 200, { vm });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to update VM";
+        sendJson(res, message === "VM not found" ? 404 : 400, { error: message });
+      }
+      return;
+    }
+
+    if (req.method === "DELETE") {
+      if (!(await requireEditPin(req))) {
+        sendJson(res, 401, { error: "Invalid or missing edit PIN" });
+        return;
+      }
+
+      try {
+        await deleteVm(vmId);
+        void refreshVm(vmId);
+        res.writeHead(204, { "Cache-Control": "no-store" });
+        res.end();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to delete VM";
+        sendJson(res, message === "VM not found" ? 404 : 400, { error: message });
+      }
+      return;
+    }
+  }
+
+  // --- LLM-сервисы (проверка доступности и готовности отвечать) ---
+
+  if (url === "/api/llms/status" && req.method === "GET") {
+    sendJson(res, 200, getLlmStatusPayload());
+    return;
+  }
+
+  if (url === "/api/llms" && req.method === "GET") {
+    try {
+      const llms = await listLlms();
+      sendJson(res, 200, { llms });
+    } catch (error) {
+      sendJson(res, 500, { error: error instanceof Error ? error.message : "Failed to load LLM services" });
+    }
+    return;
+  }
+
+  if (url === "/api/llms" && req.method === "POST") {
+    if (!(await requireEditPin(req))) {
+      sendJson(res, 401, { error: "Invalid or missing edit PIN" });
+      return;
+    }
+
+    try {
+      const body = await readJsonBody(req);
+      const llm = await createLlm(body);
+      void refreshLlm(llm.id);
+      sendJson(res, 201, { llm });
+    } catch (error) {
+      sendJson(res, 400, { error: error instanceof Error ? error.message : "Failed to create LLM service" });
+    }
+    return;
+  }
+
+  const llmMatch = url.match(/^\/api\/llms\/([^/]+)$/);
+  if (llmMatch) {
+    const llmId = decodeURIComponent(llmMatch[1]);
+
+    if (req.method === "PUT") {
+      if (!(await requireEditPin(req))) {
+        sendJson(res, 401, { error: "Invalid or missing edit PIN" });
+        return;
+      }
+
+      try {
+        const body = await readJsonBody(req);
+        const llm = await updateLlm(llmId, body);
+        void refreshLlm(llm.id);
+        sendJson(res, 200, { llm });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to update LLM service";
+        sendJson(res, message === "LLM service not found" ? 404 : 400, { error: message });
+      }
+      return;
+    }
+
+    if (req.method === "DELETE") {
+      if (!(await requireEditPin(req))) {
+        sendJson(res, 401, { error: "Invalid or missing edit PIN" });
+        return;
+      }
+
+      try {
+        await deleteLlm(llmId);
+        void refreshLlm(llmId);
+        res.writeHead(204, { "Cache-Control": "no-store" });
+        res.end();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to delete LLM service";
+        sendJson(res, message === "LLM service not found" ? 404 : 400, { error: message });
+      }
+      return;
+    }
+  }
+
+  // --- Docker (только чтение статуса контейнеров) ---
+
+  if (url === "/api/docker/status" && req.method === "GET") {
+    sendJson(res, 200, getDockerStatusPayload());
+    return;
+  }
+
   if (req.method === "GET") {
     await serveStatic(req, res);
     return;
@@ -277,6 +439,9 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, HOST, () => {
   startHealthPoller();
+  startVmPoller();
+  startLlmPoller();
+  startDockerPoller();
   printAccessUrls("Aidashboard server", PORT, HOST);
   console.log("");
   console.log("Коллеги в сети могут открыть любой Network-адрес выше в браузере.");

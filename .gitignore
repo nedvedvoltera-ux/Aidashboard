@@ -1,5 +1,7 @@
 node_modules
 dist
 data/systems.json
+data/vms.json
+data/llms.json
 .DS_Store
 *.local
