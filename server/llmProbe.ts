@@ -69,25 +69,65 @@ function requestJson(
   });
 }
 
-function resolvePath(service: LlmServiceRecord): string {
-  if (service.probeMode === "ollama") {
-    return "/api/tags";
+function stripKnownApiSuffix(baseUrl: string, probeMode: LlmServiceRecord["probeMode"]): string {
+  let base = baseUrl.trim().replace(/\/+$/, "");
+
+  if (probeMode === "ollama") {
+    return base.replace(/\/api\/(tags|generate|chat|show)\/?$/i, "");
   }
-  if (service.probeMode === "custom") {
-    const custom = service.customPath.trim();
-    return custom || "/";
+
+  if (probeMode === "openai") {
+    return base.replace(/\/v1\/(models|chat\/completions|completions|embeddings)\/?$/i, "");
   }
-  return "/v1/models";
+
+  return base;
 }
 
-function extractModelNames(service: LlmServiceRecord, body: string): string[] | undefined {
+function resolveProbeUrl(service: LlmServiceRecord): string {
+  const baseUrl = stripKnownApiSuffix(service.baseUrl, service.probeMode);
+
+  if (service.probeMode === "ollama") {
+    if (/\/api\/tags$/i.test(baseUrl)) {
+      return baseUrl;
+    }
+    if (/\/api$/i.test(baseUrl)) {
+      return `${baseUrl}/tags`;
+    }
+    return `${baseUrl}/api/tags`;
+  }
+
+  if (service.probeMode === "custom") {
+    const custom = service.customPath.trim();
+    if (!custom || custom === "/") {
+      return baseUrl;
+    }
+    const path = custom.startsWith("/") ? custom : `/${custom}`;
+    if (baseUrl.endsWith(path.replace(/\/+$/, ""))) {
+      return baseUrl;
+    }
+    return `${baseUrl}${path}`;
+  }
+
+  if (/\/v1\/models$/i.test(baseUrl)) {
+    return baseUrl;
+  }
+  if (/\/v1$/i.test(baseUrl)) {
+    return `${baseUrl}/models`;
+  }
+  return `${baseUrl}/v1/models`;
+}
+
+function extractModelNames(body: string): string[] | undefined {
   try {
     const parsed = JSON.parse(body) as Record<string, unknown>;
 
-    if (service.probeMode === "ollama" && Array.isArray(parsed.models)) {
-      return (parsed.models as Array<Record<string, unknown>>)
+    if (Array.isArray(parsed.models)) {
+      const names = (parsed.models as Array<Record<string, unknown>>)
         .map((item) => (typeof item.name === "string" ? item.name : typeof item.model === "string" ? item.model : ""))
         .filter(Boolean);
+      if (names.length > 0) {
+        return names;
+      }
     }
 
     if (Array.isArray(parsed.data)) {
@@ -104,8 +144,7 @@ function extractModelNames(service: LlmServiceRecord, body: string): string[] | 
 
 export async function probeLlm(service: LlmServiceRecord): Promise<LlmProbeResult> {
   const startedAt = Date.now();
-  const baseUrl = service.baseUrl.trim().replace(/\/+$/, "");
-  const targetPath = resolvePath(service);
+  const targetUrl = resolveProbeUrl(service);
 
   const headers: Record<string, string> = {};
   const apiKeyEnv = service.apiKeyEnv.trim();
@@ -117,14 +156,14 @@ export async function probeLlm(service: LlmServiceRecord): Promise<LlmProbeResul
   }
 
   try {
-    const { statusCode, body } = await requestJson(`${baseUrl}${targetPath}`, headers);
+    const { statusCode, body } = await requestJson(targetUrl, headers);
     const latencyMs = Date.now() - startedAt;
 
     if (statusCode < 200 || statusCode >= 300) {
-      return { online: false, latencyMs, statusCode, error: `HTTP ${statusCode}` };
+      return { online: false, latencyMs, statusCode, error: `HTTP ${statusCode} · ${targetUrl}` };
     }
 
-    const models = extractModelNames(service, body);
+    const models = extractModelNames(body);
 
     return {
       online: true,

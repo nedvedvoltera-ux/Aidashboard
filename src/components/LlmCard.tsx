@@ -162,7 +162,10 @@ export function LlmForm({ initial, onSubmit, onCancel }: LlmFormProps) {
               onChange={(event) => setForm((prev) => ({ ...prev, baseUrl: event.target.value }))}
               placeholder="http://192.168.1.20:11434"
             />
-            <span className="field-hint">Без пути в конце — путь проверки добавляется автоматически.</span>
+            <span className="field-hint">
+              Можно указать корень (http://host:9000) или адрес API (http://host:9000/v1). Путь /v1/models
+              дашборд добавит сам и не задвоит.
+            </span>
           </label>
           <label className="field">
             <span className="field-label">Тип проверки</span>
